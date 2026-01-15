@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOM Data Collector Script</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .code-block {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .code-block::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        .code-block::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent mb-2">
+                <i class="fas fa-spider text-green-400 mr-2"></i>DOM Data Collector
+            </h1>
+            <p class="text-gray-400">Powerful browser console script to extract phone numbers & emails from any webpage</p>
+        </div>
+
+        <!-- Supabase Login Section -->
+        <div id="loginSection" class="bg-gray-800 rounded-xl p-6 mb-6 border border-gray-700 border-l-4 border-l-emerald-500">
+            <h2 class="text-xl font-semibold text-emerald-400 mb-4"><i class="fas fa-sign-in-alt mr-2"></i>Supabase Login</h2>
+            <p class="text-gray-400 text-sm mb-4">Login to your Supabase account to sync exported JSON data. Your credentials will be saved locally.</p>
+            <div class="grid md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Supabase REST URL</label>
+                    <input type="text" id="supabaseUrl" placeholder="https://xyz.supabase.co" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-emerald-300 focus:outline-none focus:border-emerald-500 transition-colors">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Anon Key <span class="text-gray-500 text-xs">(optional, saved once)</span></label>
+                    <input type="password" id="supabaseAnonKey" placeholder="your-anon-key (optional)" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-emerald-300 focus:outline-none focus:border-emerald-500 transition-colors">
+                </div>
+            </div>
+            <div class="grid md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Email</label>
+                    <input type="email" id="loginEmail" placeholder="your@email.com" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-emerald-300 focus:outline-none focus:border-emerald-500 transition-colors">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Password</label>
+                    <input type="password" id="loginPassword" placeholder="your password" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-emerald-300 focus:outline-none focus:border-emerald-500 transition-colors">
+                </div>
+            </div>
+            <button id="loginBtn" onclick="loginToSupabase()" class="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-bold py-2 px-6 rounded-lg transition-all duration-300 flex items-center justify-center gap-2">
+                <i class="fas fa-sign-in-alt"></i> Login
+            </button>
+            <div id="loginError" class="hidden mt-3 p-3 bg-red-500/20 border border-red-500/50 rounded text-red-400 text-sm"></div>
+        </div>
+
+        <!-- User Info Section (shown when logged in) -->
+        <div id="userInfoSection" class="hidden bg-gray-800 rounded-xl p-6 mb-6 border border-gray-700 border-l-4 border-l-blue-500">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-xl font-semibold text-blue-400 mb-1"><i class="fas fa-user-circle mr-2"></i>Logged In</h2>
+                    <p class="text-gray-400 text-sm" id="userEmail"></p>
+                </div>
+                <button onclick="logoutFromSupabase()" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center gap-2">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+            </div>
+            <div class="text-sm text-gray-400">
+                <p><strong class="text-emerald-400">Supabase URL:</strong> <span id="displayUrl" class="text-emerald-300"></span></p>
+            </div>
+        </div>
+
+        <!-- JSON Sync Section -->
+        <div class="bg-gray-800 rounded-xl p-6 mb-6 border border-gray-700 border-l-4 border-l-blue-500">
+            <h2 class="text-xl font-semibold text-blue-400 mb-4"><i class="fas fa-sync mr-2"></i>Sync JSON Data to Supabase</h2>
+            <p class="text-gray-400 text-sm mb-4">Paste the exported JSON data from the collector script below. The system will check for existing records and add only new ones.</p>
+            
+            <textarea id="jsonDataInput" class="w-full bg-gray-900 border border-gray-600 rounded-lg p-4 text-gray-300 mb-4 h-48 resize-none font-mono text-sm" placeholder='Paste JSON data here, e.g.:
+{
+  "phones": ["+91 9876543210", "555-123-4567"],
+  "emails": ["info@example.com", "support@company.org"],
+  "source": "https://example.com"
+}'></textarea>
+            
+            <button id="syncBtn" onclick="syncToSupabase()" class="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 mb-4">
+                <i class="fas fa-cloud-upload-alt"></i> Sync to Supabase
+            </button>
+
+            <!-- Sync Results -->
+            <div id="syncResults" class="hidden">
+                <div class="grid md:grid-cols-2 gap-4 mb-4">
+                    <div class="bg-gray-900 rounded-lg p-4 border border-green-500/30">
+                        <h3 class="text-green-400 font-semibold mb-2"><i class="fas fa-check-circle mr-2"></i>Newly Added (<span id="newCount">0</span>)</h3>
+                        <div id="newRecords" class="text-gray-300 text-sm max-h-40 overflow-y-auto space-y-1"></div>
+                    </div>
+                    <div class="bg-gray-900 rounded-lg p-4 border border-yellow-500/30">
+                        <h3 class="text-yellow-400 font-semibold mb-2"><i class="fas fa-info-circle mr-2"></i>Already Exists (<span id="existingCount">0</span>)</h3>
+                        <div id="existingRecords" class="text-gray-300 text-sm max-h-40 overflow-y-auto space-y-1"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="bg-gray-800 rounded-xl p-6 mb-6 border border-gray-700">
+            <h2 class="text-xl font-semibold text-green-400 mb-4"><i class="fas fa-info-circle mr-2"></i>How to Use</h2>
+            <ol class="list-decimal list-inside space-y-2 text-gray-300">
+                <li>Copy the script below using the <strong class="text-green-400">"Copy Script"</strong> button</li>
+                <li>Navigate to any webpage you want to scrape</li>
+                <li>Open Developer Tools (<kbd class="bg-gray-700 px-2 py-1 rounded text-sm">F12</kbd> or <kbd class="bg-gray-700 px-2 py-1 rounded text-sm">Ctrl+Shift+I</kbd>)</li>
+                <li>Go to the <strong class="text-blue-400">Console</strong> tab</li>
+                <li>Paste the script and press <kbd class="bg-gray-700 px-2 py-1 rounded text-sm">Enter</kbd></li>
+                <li>Use the floating panel to collect data and export as JSON</li>
+                <li>Paste the exported JSON in the <strong class="text-blue-400">"Sync JSON Data to Supabase"</strong> section above to sync with your database</li>
+            </ol>
+        </div>
+
+        <!-- Features -->
+        <div class="grid md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+                <div class="text-2xl text-green-400 mb-2"><i class="fas fa-phone"></i></div>
+                <h3 class="font-semibold mb-1">Phone Numbers</h3>
+                <p class="text-gray-400 text-sm">Detects various formats: +91, country codes, spaces, dashes</p>
+            </div>
+            <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+                <div class="text-2xl text-blue-400 mb-2"><i class="fas fa-envelope"></i></div>
+                <h3 class="font-semibold mb-1">Email Addresses</h3>
+                <p class="text-gray-400 text-sm">Extracts all valid email patterns from DOM</p>
+            </div>
+            <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+                <div class="text-2xl text-purple-400 mb-2"><i class="fas fa-sync"></i></div>
+                <h3 class="font-semibold mb-1">Auto-Refresh</h3>
+                <p class="text-gray-400 text-sm">Continuously scans every 2 seconds for new data</p>
+            </div>
+        </div>
+
+        <!-- Copy Button -->
+        <div class="flex gap-4 mb-4">
+            <button id="copyBtn" onclick="copyScript()" class="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-2">
+                <i class="fas fa-copy"></i> Copy Script to Clipboard
+            </button>
+            <button onclick="toggleScript()" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300">
+                <i class="fas fa-eye" id="toggleIcon"></i>
+            </button>
+        </div>
+
+        <!-- Script Display -->
+        <div id="scriptContainer" class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden mb-8">
+            <div class="bg-gray-750 px-4 py-2 border-b border-gray-700 flex items-center justify-between">
+                <span class="text-gray-400 text-sm"><i class="fas fa-code mr-2"></i>JavaScript Console Script</span>
+                <span class="text-xs text-gray-500">v2.1</span>
+            </div>
+            <pre id="scriptCode" class="code-block p-4 max-h-96 overflow-y-auto"></pre>
+        </div>
+
+        <!-- Footer -->
+        <footer class="mt-12 pt-8 border-t border-gray-700">
+            <div class="text-center mb-6">
+                <p class="text-gray-400 text-sm mb-4">Use responsibly and respect website terms of service</p>
+                <div class="flex items-center justify-center gap-6 mb-4">
+                    <a href="https://ronakjain2012.netlify.app" target="_blank" rel="noopener noreferrer" class="text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-2">
+                        <i class="fas fa-globe"></i>
+                        <span class="text-sm">Portfolio</span>
+                    </a>
+                    <a href="https://linkedin.com/in/ronakjain2012" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2">
+                        <i class="fab fa-linkedin"></i>
+                        <span class="text-sm">LinkedIn</span>
+                    </a>
+                    <a href="https://github.com/ronakjain2012" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-white transition-colors flex items-center gap-2">
+                        <i class="fab fa-github"></i>
+                        <span class="text-sm">GitHub</span>
+                    </a>
+                </div>
+                <p class="text-gray-500 text-sm">
+                    Designed and developed by 
+                    <a href="https://ronakjain2012.netlify.app" target="_blank" rel="noopener noreferrer" class="text-emerald-400 hover:text-emerald-300 font-semibold transition-colors">
+                        @ronakjain2012
+                    </a>
+                </p>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+// The actual script that will be copied and run in console
+const collectorScript = `
+(function() {
+    // Prevent multiple instances
+    if (window.__dataCollectorRunning) {
+        console.log('⚠️ Data Collector is already running!');
+        return;
+    }
+    window.__dataCollectorRunning = true;
+
+    // Data storage
+    const collectedData = {
+        phones: new Set(),           // Formatted phone numbers for display
+        phoneDigits: new Set(),      // Normalized digits only for duplicate checking
+        emails: new Set()
+    };
+
+    let isRunning = false;
+    let intervalId = null;
+
+    // Phone number regex patterns - comprehensive
+    const phonePatterns = [
+        /(?:\\+?\\d{1,3}[-.\\s]?)?\\(?\\d{2,4}\\)?[-.\\s]?\\d{2,4}[-.\\s]?\\d{2,4}[-.\\s]?\\d{0,4}/g,
+        /(?:\\+?\\d{1,3})?[-.\\s]?\\d{10}/g,
+        /\\d{5}[-.\\s]?\\d{5}/g,
+        /(?:\\+\\d{1,3}[-.\\s]?)?\\d{3}[-.\\s]?\\d{3}[-.\\s]?\\d{4}/g,
+        /(?:00|\\+)?\\d{2,3}[-.\\s]?\\d{4,5}[-.\\s]?\\d{4,6}/g
+    ];
+
+    // Email regex pattern
+    const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/gi;
+
+    // Country codes with their typical national number lengths
+    const countryCodeMap = {
+        '1': { min: 10, max: 10 },      // US/Canada
+        '7': { min: 10, max: 10 },       // Russia/Kazakhstan
+        '20': { min: 8, max: 10 },       // Egypt
+        '27': { min: 9, max: 9 },        // South Africa
+        '30': { min: 10, max: 10 },      // Greece
+        '31': { min: 9, max: 9 },        // Netherlands
+        '32': { min: 9, max: 9 },        // Belgium
+        '33': { min: 9, max: 9 },        // France
+        '34': { min: 9, max: 9 },        // Spain
+        '36': { min: 9, max: 9 },        // Hungary
+        '39': { min: 9, max: 10 },       // Italy
+        '40': { min: 9, max: 9 },        // Romania
+        '41': { min: 9, max: 9 },        // Switzerland
+        '43': { min: 10, max: 13 },      // Austria
+        '44': { min: 10, max: 10 },      // UK
+        '45': { min: 8, max: 8 },        // Denmark
+        '46': { min: 9, max: 9 },        // Sweden
+        '47': { min: 8, max: 8 },        // Norway
+        '48': { min: 9, max: 9 },        // Poland
+        '49': { min: 10, max: 11 },      // Germany
+        '51': { min: 9, max: 9 },        // Peru
+        '52': { min: 10, max: 10 },      // Mexico
+        '53': { min: 8, max: 8 },        // Cuba
+        '54': { min: 10, max: 10 },      // Argentina
+        '55': { min: 10, max: 11 },      // Brazil
+        '56': { min: 9, max: 9 },        // Chile
+        '57': { min: 10, max: 10 },      // Colombia
+        '58': { min: 10, max: 10 },      // Venezuela
+        '60': { min: 9, max: 10 },       // Malaysia
+        '61': { min: 9, max: 9 },        // Australia
+        '62': { min: 9, max: 11 },       // Indonesia
+        '63': { min: 10, max: 10 },      // Philippines
+        '64': { min: 8, max: 9 },        // New Zealand
+        '65': { min: 8, max: 8 },        // Singapore
+        '66': { min: 9, max: 9 },        // Thailand
+        '81': { min: 10, max: 10 },      // Japan
+        '82': { min: 9, max: 10 },       // South Korea
+        '84': { min: 9, max: 10 },       // Vietnam
+        '86': { min: 11, max: 11 },      // China
+        '90': { min: 10, max: 10 },      // Turkey
+        '91': { min: 10, max: 10 },      // India
+        '92': { min: 10, max: 10 },      // Pakistan
+        '93': { min: 9, max: 9 },        // Afghanistan
+        '94': { min: 9, max: 9 },        // Sri Lanka
+        '95': { min: 8, max: 10 },       // Myanmar
+        '98': { min: 10, max: 10 }       // Iran
+    };
+
+    // Get all country codes sorted by length (longest first) for proper matching
+    const countryCodes = Object.keys(countryCodeMap).sort((a, b) => b.length - a.length);
+
+    // Normalize phone to digits only
+    function normalizePhoneDigits(phone) {
+        if (!phone) return null;
+        return phone.replace(/\\D/g, '');
+    }
+
+    // Check if normalized number already exists
+    function phoneExists(normalizedDigits) {
+        return collectedData.phoneDigits.has(normalizedDigits);
+    }
+
+    // Clean and normalize phone number with improved country code detection
+    function cleanPhoneNumber(phone) {
+        if (!phone) return null;
+        
+        let cleaned = phone.trim();
+        let hasPlus = cleaned.startsWith('+');
+        let has00 = cleaned.startsWith('00');
+        let digits = cleaned.replace(/\\D/g, '');
+        
+        // Basic length validation
+        if (digits.length < 7 || digits.length > 15) return null;
+        
+        let countryCode = '';
+        let nationalNumber = digits;
+        let normalizedDigits = digits;
+        
+        // Only attempt country code detection if there's a clear indicator (+ or 00)
+        // or if the number is clearly too long to be a local number
+        if (hasPlus || has00) {
+            // Remove 00 prefix if present
+            if (has00) {
+                digits = digits.substring(2);
+                normalizedDigits = digits;
+            }
+            
+            // Try to match country codes (longest first to avoid partial matches)
+            for (const code of countryCodes) {
+                if (digits.startsWith(code)) {
+                    const potentialNational = digits.substring(code.length);
+                    const codeInfo = countryCodeMap[code];
+                    
+                    // Validate national number length
+                    if (potentialNational.length >= codeInfo.min && potentialNational.length <= codeInfo.max) {
+                        countryCode = '+' + code;
+                        nationalNumber = potentialNational;
+                    break;
+                }
+            }
+        }
+        } else if (digits.length > 12) {
+            // No + or 00, but number is very long - might have implicit country code
+            // Try matching country codes, but be more conservative
+            for (const code of countryCodes) {
+                if (digits.startsWith(code)) {
+                    const potentialNational = digits.substring(code.length);
+                    const codeInfo = countryCodeMap[code];
+                    
+                    // More strict validation for numbers without + or 00
+                    if (potentialNational.length >= codeInfo.min && potentialNational.length <= codeInfo.max && potentialNational.length >= 8) {
+                        countryCode = '+' + code;
+                        nationalNumber = potentialNational;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // Validate final national number
+        if (nationalNumber.length < 7 || nationalNumber.length > 12) {
+            // If no valid country code split, check if it's a valid standalone number
+            if (digits.length >= 10 && digits.length <= 12) {
+                return { formatted: digits, normalized: digits };
+            }
+            return null;
+        }
+        
+        // Format the result
+        const formatted = countryCode ? countryCode + ' ' + nationalNumber : nationalNumber;
+        return { formatted: formatted, normalized: normalizedDigits };
+    }
+
+    // Extract data from DOM
+    function extractData() {
+        const bodyText = document.body.innerText || '';
+        const bodyHTML = document.body.innerHTML || '';
+        
+        let newPhones = 0;
+        let newEmails = 0;
+
+        // Extract phone numbers
+        phonePatterns.forEach(pattern => {
+            const matches = bodyText.match(pattern) || [];
+            matches.forEach(match => {
+                const result = cleanPhoneNumber(match);
+                if (result) {
+                    const normalized = result.normalized;
+                    // Check if this number (normalized) already exists, regardless of formatting
+                    if (!phoneExists(normalized)) {
+                        // Additional validation: must have at least 10 digits total
+                        if (normalized.length >= 10) {
+                            collectedData.phones.add(result.formatted);
+                            collectedData.phoneDigits.add(normalized);
+                            newPhones++;
+                        }
+                    }
+                }
+            });
+        });
+
+        // Also check href="tel:" links
+        const telLinks = document.querySelectorAll('a[href^="tel:"]');
+        telLinks.forEach(link => {
+            const phone = link.getAttribute('href').replace('tel:', '');
+            const result = cleanPhoneNumber(phone);
+            if (result) {
+                const normalized = result.normalized;
+                // Check if this number (normalized) already exists, regardless of formatting
+                if (!phoneExists(normalized)) {
+                    if (normalized.length >= 10) {
+                        collectedData.phones.add(result.formatted);
+                        collectedData.phoneDigits.add(normalized);
+                        newPhones++;
+                    }
+                }
+            }
+        });
+
+        // Extract emails
+        const emailMatches = bodyText.match(emailPattern) || [];
+        emailMatches.forEach(email => {
+            const cleanEmail = email.toLowerCase().trim();
+            if (!collectedData.emails.has(cleanEmail)) {
+                collectedData.emails.add(cleanEmail);
+                newEmails++;
+            }
+        });
+
+        // Also check href="mailto:" links
+        const mailLinks = document.querySelectorAll('a[href^="mailto:"]');
+        mailLinks.forEach(link => {
+            const email = link.getAttribute('href').replace('mailto:', '').split('?')[0].toLowerCase().trim();
+            if (email && !collectedData.emails.has(email)) {
+                collectedData.emails.add(email);
+                newEmails++;
+            }
+        });
+
+        updateUI();
+
+        if (newPhones > 0 || newEmails > 0) {
+            console.log(\`📊 Found: \${newPhones} new phones, \${newEmails} new emails\`);
+        }
+    }
+
+    // Create floating UI
+    function createUI() {
+        const container = document.createElement('div');
+        container.id = 'dataCollectorUI';
+        container.innerHTML = \`
+            <style>
+                #dataCollectorUI {
+                    position: fixed;
+                    top: 10px;
+                    right: 10px;
+                    width: 320px;
+                    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                    border-radius: 12px;
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    z-index: 2147483647;
+                    color: #fff;
+                    font-size: 13px;
+                    border: 1px solid rgba(255,255,255,0.1);
+                }
+                #dataCollectorUI * { box-sizing: border-box; }
+                .dc-header {
+                    padding: 12px 15px;
+                    background: rgba(0,0,0,0.3);
+                    border-radius: 12px 12px 0 0;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    border-bottom: 1px solid rgba(255,255,255,0.1);
+                }
+                .dc-title {
+                    font-weight: 600;
+                    font-size: 14px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                .dc-status {
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 50%;
+                    background: #ef4444;
+                }
+                .dc-status.running { background: #22c55e; animation: pulse 1.5s infinite; }
+                @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+                .dc-close {
+                    background: none;
+                    border: none;
+                    color: #888;
+                    cursor: pointer;
+                    font-size: 18px;
+                    padding: 0;
+                    line-height: 1;
+                }
+                .dc-close:hover { color: #fff; }
+                .dc-body { padding: 15px; }
+                .dc-stats {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 10px;
+                    margin-bottom: 15px;
+                }
+                .dc-stat {
+                    background: rgba(255,255,255,0.05);
+                    padding: 12px;
+                    border-radius: 8px;
+                    text-align: center;
+                }
+                .dc-stat-value {
+                    font-size: 24px;
+                    font-weight: 700;
+                    margin-bottom: 2px;
+                }
+                .dc-stat-label { font-size: 11px; color: #888; text-transform: uppercase; }
+                .dc-phones .dc-stat-value { color: #22c55e; }
+                .dc-emails .dc-stat-value { color: #3b82f6; }
+                .dc-buttons {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 8px;
+                    margin-bottom: 12px;
+                }
+                .dc-btn {
+                    padding: 10px 12px;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-weight: 500;
+                    font-size: 12px;
+                    transition: all 0.2s;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 6px;
+                }
+                .dc-btn-start { background: #22c55e; color: #fff; }
+                .dc-btn-start:hover { background: #16a34a; }
+                .dc-btn-stop { background: #ef4444; color: #fff; }
+                .dc-btn-stop:hover { background: #dc2626; }
+                .dc-btn-export { background: #8b5cf6; color: #fff; }
+                .dc-btn-export:hover { background: #7c3aed; }
+                .dc-btn-clear { background: #6b7280; color: #fff; }
+                .dc-btn-clear:hover { background: #4b5563; }
+                .dc-data-section {
+                    background: rgba(0,0,0,0.3);
+                    border-radius: 8px;
+                    margin-top: 10px;
+                    max-height: 200px;
+                    overflow: hidden;
+                }
+                .dc-data-header {
+                    padding: 8px 12px;
+                    font-size: 11px;
+                    text-transform: uppercase;
+                    color: #888;
+                    border-bottom: 1px solid rgba(255,255,255,0.1);
+                    display: flex;
+                    justify-content: space-between;
+                }
+                .dc-data-list {
+                    max-height: 150px;
+                    overflow-y: auto;
+                    padding: 8px 12px;
+                    font-size: 12px;
+                }
+                .dc-data-list::-webkit-scrollbar { width: 4px; }
+                .dc-data-list::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
+                .dc-data-item {
+                    padding: 4px 0;
+                    border-bottom: 1px solid rgba(255,255,255,0.05);
+                    word-break: break-all;
+                }
+                .dc-data-item:last-child { border-bottom: none; }
+                .dc-tabs {
+                    display: flex;
+                    gap: 5px;
+                    margin-bottom: 10px;
+                }
+                .dc-tab {
+                    flex: 1;
+                    padding: 8px;
+                    background: rgba(255,255,255,0.05);
+                    border: none;
+                    border-radius: 6px;
+                    color: #888;
+                    cursor: pointer;
+                    font-size: 12px;
+                    transition: all 0.2s;
+                }
+                .dc-tab.active { background: rgba(255,255,255,0.15); color: #fff; }
+                .dc-tab:hover { background: rgba(255,255,255,0.1); }
+                .dc-minimized .dc-body { display: none; }
+                .dc-minimized { width: auto; }
+            </style>
+            <div class="dc-header">
+                <div class="dc-title">
+                    <span class="dc-status" id="dcStatus"></span>
+                    <span>📊 Data Collector</span>
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <button class="dc-close" id="dcMinimize" title="Minimize">−</button>
+                    <button class="dc-close" id="dcClose" title="Close">×</button>
+                </div>
+            </div>
+            <div class="dc-body">
+                <div class="dc-stats">
+                    <div class="dc-stat dc-phones">
+                        <div class="dc-stat-value" id="dcPhoneCount">0</div>
+                        <div class="dc-stat-label">📱 Phones</div>
+                    </div>
+                    <div class="dc-stat dc-emails">
+                        <div class="dc-stat-value" id="dcEmailCount">0</div>
+                        <div class="dc-stat-label">📧 Emails</div>
+                    </div>
+                </div>
+                <div class="dc-buttons">
+                    <button class="dc-btn dc-btn-start" id="dcStartBtn">▶ Start</button>
+                    <button class="dc-btn dc-btn-stop" id="dcStopBtn" style="display:none;">⏹ Stop</button>
+                    <button class="dc-btn dc-btn-export" id="dcExportBtn">📥 Export</button>
+                </div>
+                <div class="dc-buttons">
+                    <button class="dc-btn dc-btn-clear" id="dcClearBtn">🗑 Clear All</button>
+                    <button class="dc-btn" style="background:#0ea5e9;" id="dcCopyBtn">📋 Copy All</button>
+                </div>
+                <div class="dc-tabs">
+                    <button class="dc-tab active" data-tab="phones">Phones</button>
+                    <button class="dc-tab" data-tab="emails">Emails</button>
+                </div>
+                <div class="dc-data-section">
+                    <div class="dc-data-header">
+                        <span id="dcDataTitle">Collected Data</span>
+                        <span id="dcDataCount">0 items</span>
+                    </div>
+                    <div class="dc-data-list" id="dcDataList">
+                        <div style="color:#666;text-align:center;padding:20px;">Click Start to begin collecting...</div>
+                    </div>
+                </div>
+            </div>
+        \`;
+        document.body.appendChild(container);
+
+        // Event listeners
+        let currentTab = 'phones';
+        
+        document.getElementById('dcStartBtn').onclick = startCollecting;
+        document.getElementById('dcStopBtn').onclick = stopCollecting;
+        document.getElementById('dcExportBtn').onclick = exportData;
+        document.getElementById('dcClearBtn').onclick = clearData;
+        document.getElementById('dcCopyBtn').onclick = copyToClipboard;
+        document.getElementById('dcClose').onclick = closeCollector;
+        document.getElementById('dcMinimize').onclick = () => {
+            container.classList.toggle('dc-minimized');
+        };
+
+        document.querySelectorAll('.dc-tab').forEach(tab => {
+            tab.onclick = () => {
+                document.querySelectorAll('.dc-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentTab = tab.dataset.tab;
+                updateUI();
+            };
+        });
+
+        window.dcGetCurrentTab = () => currentTab;
+    }
+
+    function updateUI() {
+        const phoneCount = collectedData.phones.size;
+        const emailCount = collectedData.emails.size;
+        
+        document.getElementById('dcPhoneCount').textContent = phoneCount;
+        document.getElementById('dcEmailCount').textContent = emailCount;
+        
+        const currentTab = window.dcGetCurrentTab();
+        const dataList = document.getElementById('dcDataList');
+        const dataCount = document.getElementById('dcDataCount');
+        
+        const items = currentTab === 'phones' 
+            ? Array.from(collectedData.phones) 
+            : Array.from(collectedData.emails);
+        
+        dataCount.textContent = items.length + ' items';
+        
+        if (items.length === 0) {
+            dataList.innerHTML = '<div style="color:#666;text-align:center;padding:20px;">No data yet...</div>';
+        } else {
+            dataList.innerHTML = items.map(item => 
+                '<div class="dc-data-item">' + item + '</div>'
+            ).join('');
+        }
+    }
+
+    function startCollecting() {
+        if (isRunning) return;
+        isRunning = true;
+        
+        document.getElementById('dcStatus').classList.add('running');
+        document.getElementById('dcStartBtn').style.display = 'none';
+        document.getElementById('dcStopBtn').style.display = 'flex';
+        
+        extractData(); // Initial extraction
+        intervalId = setInterval(extractData, 2000);
+        
+        console.log('✅ Data Collector started!');
+    }
+
+    function stopCollecting() {
+        if (!isRunning) return;
+        isRunning = false;
+        
+        document.getElementById('dcStatus').classList.remove('running');
+        document.getElementById('dcStartBtn').style.display = 'flex';
+        document.getElementById('dcStopBtn').style.display = 'none';
+        
+        if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+        }
+        
+        console.log('⏹ Data Collector stopped!');
+    }
+
+    function exportData() {
+        const data = {
+            phones: Array.from(collectedData.phones),
+            emails: Array.from(collectedData.emails),
+            exportedAt: new Date().toISOString(),
+            source: window.location.href
+        };
+        
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'collected-data-' + Date.now() + '.json';
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        console.log('📥 Data exported!');
+    }
+
+    function copyToClipboard() {
+        const phones = Array.from(collectedData.phones).join('\\n');
+        const emails = Array.from(collectedData.emails).join('\\n');
+        const text = '=== PHONES ===\\n' + phones + '\\n\\n=== EMAILS ===\\n' + emails;
+        
+        navigator.clipboard.writeText(text).then(() => {
+            alert('✅ Data copied to clipboard!');
+        });
+    }
+
+    function clearData() {
+        if (confirm('Clear all collected data?')) {
+            collectedData.phones.clear();
+            collectedData.phoneDigits.clear();
+            collectedData.emails.clear();
+            updateUI();
+            console.log('🗑 Data cleared!');
+        }
+    }
+
+    function closeCollector() {
+        stopCollecting();
+        document.getElementById('dataCollectorUI').remove();
+        window.__dataCollectorRunning = false;
+        console.log('👋 Data Collector closed!');
+    }
+
+    // Initialize
+    createUI();
+    console.log('🚀 Data Collector initialized! Click Start to begin.');
+})();
+`;
+
+        // Display the script
+        document.getElementById('scriptCode').textContent = collectorScript;
+
+        // Copy script function
+        function copyScript() {
+            navigator.clipboard.writeText(collectorScript).then(() => {
+                const btn = document.getElementById('copyBtn');
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                btn.classList.remove('from-green-500', 'to-green-600');
+                btn.classList.add('from-emerald-600', 'to-emerald-700');
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="fas fa-copy"></i> Copy Script to Clipboard';
+                    btn.classList.remove('from-emerald-600', 'to-emerald-700');
+                    btn.classList.add('from-green-500', 'to-green-600');
+                }, 2000);
+            });
+        }
+
+        // Sync JSON to Supabase
+        // Load from localStorage
+        function loadFromLocalStorage() {
+            const savedUrl = localStorage.getItem('supabaseUrl');
+            const savedToken = localStorage.getItem('supabaseToken');
+            const savedUser = localStorage.getItem('supabaseUser');
+            const savedAnonKey = localStorage.getItem('supabaseAnonKey');
+
+            if (savedUrl) {
+                document.getElementById('supabaseUrl').value = savedUrl;
+            }
+
+            if (savedAnonKey) {
+                document.getElementById('supabaseAnonKey').value = savedAnonKey;
+            }
+
+            if (savedToken && savedUser) {
+                // User is logged in
+                const user = JSON.parse(savedUser);
+                showUserInfo(savedUrl, user);
+            }
+        }
+
+        // Save to localStorage
+        function saveToLocalStorage(url, token, user) {
+            if (url) localStorage.setItem('supabaseUrl', url);
+            if (token) localStorage.setItem('supabaseToken', token);
+            if (user) localStorage.setItem('supabaseUser', JSON.stringify(user));
+        }
+
+        // Clear localStorage
+        function clearLocalStorage() {
+            localStorage.removeItem('supabaseUrl');
+            localStorage.removeItem('supabaseToken');
+            localStorage.removeItem('supabaseUser');
+        }
+
+        // Show user info section
+        function showUserInfo(url, user) {
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('userInfoSection').classList.remove('hidden');
+            document.getElementById('userEmail').textContent = user.email || 'User';
+            document.getElementById('displayUrl').textContent = url || 'Not set';
+        }
+
+        // Show login section
+        function showLoginSection() {
+            document.getElementById('loginSection').classList.remove('hidden');
+            document.getElementById('userInfoSection').classList.add('hidden');
+            document.getElementById('loginError').classList.add('hidden');
+        }
+
+        // Login to Supabase
+        async function loginToSupabase() {
+            const url = document.getElementById('supabaseUrl').value.trim();
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+            const errorDiv = document.getElementById('loginError');
+            const loginBtn = document.getElementById('loginBtn');
+
+            // Validation
+            if (!url || !email || !password) {
+                errorDiv.textContent = '⚠️ Please fill in all fields';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            // Show loading
+            const originalText = loginBtn.innerHTML;
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging in...';
+            errorDiv.classList.add('hidden');
+
+            try {
+                // Get anon key for auth (required for Supabase auth)
+                let anonKey = document.getElementById('supabaseAnonKey').value.trim();
+                if (!anonKey) {
+                    anonKey = localStorage.getItem('supabaseAnonKey');
+                }
+                if (!anonKey) {
+                    errorDiv.textContent = '⚠️ Anon key is required for authentication. Please enter it above.';
+                    errorDiv.classList.remove('hidden');
+                    loginBtn.disabled = false;
+                    loginBtn.innerHTML = originalText;
+                    return;
+                }
+                // Save anon key if provided
+                if (document.getElementById('supabaseAnonKey').value.trim()) {
+                    localStorage.setItem('supabaseAnonKey', anonKey);
+                }
+
+                // Login to Supabase Auth
+                const response = await fetch(`${url}/auth/v1/token?grant_type=password`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': anonKey
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        password: password
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error_description || error.message || 'Login failed');
+                }
+
+                const data = await response.json();
+                const token = data.access_token;
+                const user = data.user;
+
+                // Save to localStorage
+                saveToLocalStorage(url, token, user);
+
+                // Show user info
+                showUserInfo(url, user);
+
+                // Clear password field
+                document.getElementById('loginPassword').value = '';
+
+            } catch (error) {
+                errorDiv.textContent = `❌ ${error.message || 'Login failed. Please check your credentials.'}`;
+                errorDiv.classList.remove('hidden');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = originalText;
+            }
+        }
+
+        // Logout from Supabase
+        function logoutFromSupabase() {
+            // Clear token and user, but keep URL and anon key
+            localStorage.removeItem('supabaseToken');
+            localStorage.removeItem('supabaseUser');
+            showLoginSection();
+            document.getElementById('loginEmail').value = '';
+            document.getElementById('loginPassword').value = '';
+        }
+
+        async function syncToSupabase() {
+            // Get credentials from localStorage
+            const url = localStorage.getItem('supabaseUrl');
+            const token = localStorage.getItem('supabaseToken');
+            const anonKey = localStorage.getItem('supabaseAnonKey');
+
+            // Validation
+            if (!url || !token || !anonKey) {
+                alert('⚠️ Please login to Supabase first');
+                return;
+            }
+
+            const jsonInput = document.getElementById('jsonDataInput').value.trim();
+            const resultsDiv = document.getElementById('syncResults');
+            const newRecordsDiv = document.getElementById('newRecords');
+            const existingRecordsDiv = document.getElementById('existingRecords');
+            const newCountSpan = document.getElementById('newCount');
+            const existingCountSpan = document.getElementById('existingCount');
+
+            if (!jsonInput) {
+                alert('⚠️ Please paste JSON data to sync');
+                return;
+            }
+
+            // Parse JSON
+            let data;
+            try {
+                data = JSON.parse(jsonInput);
+            } catch (e) {
+                alert('❌ Invalid JSON format. Please check your data.');
+                return;
+            }
+
+            const phones = data.phones || [];
+            const emails = data.emails || [];
+            const source = data.source || 'Unknown';
+
+            if (phones.length === 0 && emails.length === 0) {
+                alert('⚠️ No phones or emails found in JSON data');
+                return;
+            }
+
+            // Show loading state
+            const syncBtn = document.getElementById('syncBtn');
+            const originalText = syncBtn.innerHTML;
+            syncBtn.disabled = true;
+            syncBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
+
+            const TABLE_NAME = 'data_collection';
+            const newRecords = [];
+            const existingRecords = [];
+
+            // Process phones
+            for (const phone of phones) {
+                if (!phone) continue;
+                
+                try {
+                    // Check if exists
+                    const checkUrl = `${url}/rest/v1/${TABLE_NAME}?phoneNumber=eq.${encodeURIComponent(phone)}&select=id`;
+                    const checkResponse = await fetch(checkUrl, {
+                        headers: {
+                            'apikey': anonKey,
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+
+                    if (checkResponse.ok) {
+                        const existing = await checkResponse.json();
+                        
+                        if (existing && existing.length > 0) {
+                            existingRecords.push({ type: 'phone', value: phone });
+                        } else {
+                            // Insert new record
+                            const postResponse = await fetch(`${url}/rest/v1/${TABLE_NAME}`, {
+                                method: 'POST',
+                                headers: {
+                                    'apikey': anonKey,
+                                    'Authorization': `Bearer ${token}`,
+                                    'Content-Type': 'application/json',
+                                    'Prefer': 'return=minimal'
+                                },
+                                body: JSON.stringify({
+                                    phoneNumber: phone,
+                                    email: null,
+                                    pageUrl: source
+                                })
+                            });
+
+                            if (postResponse.ok) {
+                                newRecords.push({ type: 'phone', value: phone });
+                            } else {
+                                const error = await postResponse.text();
+                                console.error('Failed to insert phone:', phone, error);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error processing phone:', phone, e);
+                }
+            }
+
+            // Process emails
+            for (const email of emails) {
+                if (!email) continue;
+                
+                try {
+                    // Check if exists
+                    const checkUrl = `${url}/rest/v1/${TABLE_NAME}?email=eq.${encodeURIComponent(email)}&select=id`;
+                    const checkResponse = await fetch(checkUrl, {
+                        headers: {
+                            'apikey': anonKey,
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+
+                    if (checkResponse.ok) {
+                        const existing = await checkResponse.json();
+                        
+                        if (existing && existing.length > 0) {
+                            existingRecords.push({ type: 'email', value: email });
+                        } else {
+                            // Insert new record
+                            const postResponse = await fetch(`${url}/rest/v1/${TABLE_NAME}`, {
+                                method: 'POST',
+                                headers: {
+                                    'apikey': anonKey,
+                                    'Authorization': `Bearer ${token}`,
+                                    'Content-Type': 'application/json',
+                                    'Prefer': 'return=minimal'
+                                },
+                                body: JSON.stringify({
+                                    phoneNumber: null,
+                                    email: email,
+                                    pageUrl: source
+                                })
+                            });
+
+                            if (postResponse.ok) {
+                                newRecords.push({ type: 'email', value: email });
+                            } else {
+                                const error = await postResponse.text();
+                                console.error('Failed to insert email:', email, error);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error processing email:', email, e);
+                }
+            }
+            
+            // Display results
+            newCountSpan.textContent = newRecords.length;
+            existingCountSpan.textContent = existingRecords.length;
+
+            newRecordsDiv.innerHTML = newRecords.length > 0
+                ? newRecords.map(r => `<div class="py-1 px-2 bg-green-500/10 rounded text-xs border-l-2 border-green-500">${r.type === 'phone' ? '📱' : '📧'} ${r.value}</div>`).join('')
+                : '<div class="text-gray-500 text-xs">No new records</div>';
+
+            existingRecordsDiv.innerHTML = existingRecords.length > 0
+                ? existingRecords.map(r => `<div class="py-1 px-2 bg-yellow-500/10 rounded text-xs border-l-2 border-yellow-500">${r.type === 'phone' ? '📱' : '📧'} ${r.value}</div>`).join('')
+                : '<div class="text-gray-500 text-xs">No existing records</div>';
+
+            resultsDiv.classList.remove('hidden');
+
+            // Clear textarea
+            document.getElementById('jsonDataInput').value = '';
+
+            // Reset button
+            syncBtn.disabled = false;
+            syncBtn.innerHTML = originalText;
+
+        }
+
+        // Toggle script visibility
+        let scriptVisible = true;
+        function toggleScript() {
+            scriptVisible = !scriptVisible;
+            document.getElementById('scriptCode').style.display = scriptVisible ? 'block' : 'none';
+            document.getElementById('toggleIcon').className = scriptVisible ? 'fas fa-eye' : 'fas fa-eye-slash';
+        }
+
+        // Make functions available globally
+        window.copyScript = copyScript;
+        window.toggleScript = toggleScript;
+        window.syncToSupabase = syncToSupabase;
+        window.loginToSupabase = loginToSupabase;
+        window.logoutFromSupabase = logoutFromSupabase;
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadFromLocalStorage();
+        });
+    </script>
+</body>
+</html>
