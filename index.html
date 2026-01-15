@@ -435,27 +435,155 @@ const collectorScript = `
         }
     }
 
-    // Create floating UI
-    function createUI() {
-        const container = document.createElement('div');
-        container.id = 'dataCollectorUI';
-        container.innerHTML = \`
-            <style>
-                #dataCollectorUI {
-                    position: fixed;
-                    top: 10px;
-                    right: 10px;
-                    width: 320px;
-                    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-                    border-radius: 12px;
-                    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    z-index: 2147483647;
-                    color: #fff;
-                    font-size: 13px;
-                    border: 1px solid rgba(255,255,255,0.1);
+    // Store UI references globally to survive DOM rewrites
+    let uiContainer = null;
+    let shadowRoot = null;
+    let uiObserver = null;
+    let isUIMinimized = false;
+
+    // Helper to query elements in shadow root or regular DOM
+    function queryUI(selector) {
+        if (!shadowRoot) return null;
+        try {
+            return shadowRoot.querySelector ? shadowRoot.querySelector(selector) : shadowRoot.querySelectorAll ? shadowRoot.querySelectorAll(selector)[0] : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function queryUIAll(selector) {
+        if (!shadowRoot) return [];
+        try {
+            return shadowRoot.querySelectorAll ? Array.from(shadowRoot.querySelectorAll(selector)) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    // Monitor and recreate UI if removed by LinkedIn's DOM manipulation
+    function setupUIMonitor() {
+        if (uiObserver) return; // Already monitoring
+        
+        // Periodic check to ensure UI stays in DOM and on top
+        const checkInterval = setInterval(() => {
+            if (uiContainer && shadowRoot && !document.body.contains(uiContainer)) {
+                console.log('🔄 UI was removed, recreating...');
+                try {
+                    if (document.body) {
+                        document.body.appendChild(uiContainer);
+                        // Ensure it's on top after reattaching
+                        uiContainer.style.zIndex = '2147483647';
+                        uiContainer.style.pointerEvents = 'auto';
+                    }
+                } catch (e) {
+                    console.warn('Error reattaching UI:', e);
                 }
-                #dataCollectorUI * { box-sizing: border-box; }
+            } else if (uiContainer && document.body.contains(uiContainer)) {
+                // UI exists, ensure it stays on top
+                uiContainer.style.zIndex = '2147483647';
+                uiContainer.style.pointerEvents = 'auto';
+            }
+        }, 1000);
+        
+        // Store interval ID for cleanup
+        window.__dcCheckInterval = checkInterval;
+        
+        uiObserver = new MutationObserver((mutations) => {
+            // Check if our UI container was removed
+            if (uiContainer && shadowRoot && !document.body.contains(uiContainer)) {
+                console.log('🔄 UI was removed, recreating...');
+                try {
+                    if (document.body) {
+                        document.body.appendChild(uiContainer);
+                        // Ensure it's on top after reattaching
+                        uiContainer.style.zIndex = '2147483647';
+                        uiContainer.style.pointerEvents = 'auto';
+                    }
+                } catch (e) {
+                    console.warn('Error reattaching UI:', e);
+                }
+            }
+        });
+
+        // Observe body for child removals
+        if (document.body) {
+            uiObserver.observe(document.body, {
+                childList: true,
+                subtree: false // Only watch direct children for performance
+            });
+        }
+    }
+
+    // Create floating UI using Shadow DOM for isolation
+    function createUI() {
+        // Remove existing UI if present
+        const existingUI = document.getElementById('dataCollectorUI');
+        if (existingUI) {
+            existingUI.remove();
+        }
+
+        // Create host element
+        uiContainer = document.createElement('div');
+        uiContainer.id = 'dataCollectorUI';
+        uiContainer.style.cssText = 'position: fixed !important; top: 10px !important; right: 10px !important; z-index: 2147483647 !important; pointer-events: auto !important; isolation: isolate !important;';
+        
+        // Create Shadow DOM for isolation
+        try {
+            shadowRoot = uiContainer.attachShadow({ mode: 'open' });
+        } catch (e) {
+            // Fallback if Shadow DOM not supported
+            console.warn('Shadow DOM not supported, using regular DOM');
+            shadowRoot = uiContainer;
+        }
+
+        // Create styles
+        const styles = document.createElement('style');
+        styles.textContent = \`
+            :host {
+                display: block !important;
+                position: fixed !important;
+                top: 10px !important;
+                right: 10px !important;
+                width: 320px !important;
+                z-index: 2147483647 !important;
+                pointer-events: auto !important;
+                isolation: isolate !important;
+            }
+            #dataCollectorUI {
+                width: 100%;
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                border-radius: 12px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                color: #fff;
+                font-size: 13px;
+                border: 1px solid rgba(255,255,255,0.1);
+                pointer-events: auto !important;
+                position: relative !important;
+            }
+            * { 
+                box-sizing: border-box;
+            }
+            button, a, .dc-btn, .dc-tab, .dc-close {
+                pointer-events: auto !important;
+                cursor: pointer !important;
+                z-index: inherit !important;
+                position: relative !important;
+            }
+            #dataCollectorUI * {
+                pointer-events: auto !important;
+            }
+            #dataCollectorUI {
+                touch-action: none !important;
+                -webkit-touch-callout: none !important;
+                -webkit-user-select: none !important;
+                user-select: none !important;
+            }
+            #dataCollectorUI button, #dataCollectorUI .dc-btn, #dataCollectorUI .dc-tab {
+                -webkit-user-select: none !important;
+                user-select: none !important;
+                touch-action: manipulation !important;
+            }
                 .dc-header {
                     padding: 12px 15px;
                     background: rgba(0,0,0,0.3);
@@ -588,7 +716,12 @@ const collectorScript = `
                 .dc-tab:hover { background: rgba(255,255,255,0.1); }
                 .dc-minimized .dc-body { display: none; }
                 .dc-minimized { width: auto; }
-            </style>
+        \`;
+
+        // Create HTML content
+        const htmlContent = document.createElement('div');
+        htmlContent.id = 'dataCollectorUI';
+        htmlContent.innerHTML = \`
             <div class="dc-header">
                 <div class="dc-title">
                     <span class="dc-status" id="dcStatus"></span>
@@ -634,43 +767,309 @@ const collectorScript = `
                 </div>
             </div>
         \`;
-        document.body.appendChild(container);
 
-        // Event listeners
+        // Append styles and content to shadow root
+        shadowRoot.appendChild(styles);
+        shadowRoot.appendChild(htmlContent);
+
+        // Ensure body exists and append container
+        function ensureUIInDOM() {
+            if (!document.body) {
+                setTimeout(ensureUIInDOM, 100);
+                return;
+            }
+            if (!document.body.contains(uiContainer)) {
+                document.body.appendChild(uiContainer);
+            }
+            // Ensure UI stays on top
+            ensureUIOnTop();
+        }
+        
+        // Function to ensure UI is always on top and clickable
+        function ensureUIOnTop() {
+            if (!uiContainer) return;
+            
+            try {
+                // Force highest z-index
+                uiContainer.style.zIndex = '2147483647';
+                uiContainer.style.pointerEvents = 'auto';
+                
+                // Move to end of body to ensure it's last (highest in stacking context)
+                if (uiContainer.parentNode && uiContainer.parentNode.lastChild !== uiContainer) {
+                    uiContainer.parentNode.appendChild(uiContainer);
+                }
+                
+                // Check for overlaying elements and adjust
+                const rect = uiContainer.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {
+                    // UI is visible, ensure it's clickable
+                    uiContainer.style.pointerEvents = 'auto';
+                    const content = shadowRoot.querySelector('#dataCollectorUI');
+                    if (content) {
+                        content.style.pointerEvents = 'auto';
+                    }
+                }
+            } catch (e) {
+                console.warn('Error ensuring UI on top:', e);
+            }
+        }
+        
+        ensureUIInDOM();
+
+        // Setup monitor to detect DOM removal
+        setupUIMonitor();
+        
+        // Periodically ensure UI stays on top
+        setInterval(() => {
+            if (uiContainer && document.body.contains(uiContainer)) {
+                ensureUIOnTop();
+            }
+        }, 2000);
+
+        // Add event listeners to container to ensure clicks work
+        if (uiContainer) {
+            // Bring to front on interaction, but don't block button clicks
+            ['mousedown', 'touchstart'].forEach(eventType => {
+                uiContainer.addEventListener(eventType, (e) => {
+                    // Only stop propagation if clicking outside the UI content
+                    const target = e.target;
+                    if (target === uiContainer || !shadowRoot.contains(target)) {
+                        e.stopPropagation();
+                    }
+                    // Ensure UI is on top
+                    ensureUIOnTop();
+                }, true); // Use capture phase
+            });
+        }
+        
+        // Event listeners - use querySelector on shadow root and add null checks
         let currentTab = 'phones';
         
-        document.getElementById('dcStartBtn').onclick = startCollecting;
-        document.getElementById('dcStopBtn').onclick = stopCollecting;
-        document.getElementById('dcExportBtn').onclick = exportData;
-        document.getElementById('dcClearBtn').onclick = clearData;
-        document.getElementById('dcCopyBtn').onclick = copyToClipboard;
-        document.getElementById('dcClose').onclick = closeCollector;
-        document.getElementById('dcMinimize').onclick = () => {
-            container.classList.toggle('dc-minimized');
-        };
+        // Use event delegation on shadow root for better reliability
+        if (shadowRoot) {
+            shadowRoot.addEventListener('click', (e) => {
+                const target = e.target;
+                if (!target) return;
+                
+                // Helper to check if target matches selector
+                const matchesSelector = (el, selector) => {
+                    if (!el) return false;
+                    if (el.id === selector.replace('#', '')) return true;
+                    if (el.classList && el.classList.contains(selector.replace('.', ''))) return true;
+                    try {
+                        if (el.matches && el.matches(selector)) return true;
+                        if (el.closest && el.closest(selector)) return true;
+                    } catch (err) {}
+                    return false;
+                };
+                
+                // Handle button clicks via delegation - check multiple ways
+                const startBtn = shadowRoot.querySelector('#dcStartBtn');
+                const stopBtn = shadowRoot.querySelector('#dcStopBtn');
+                const exportBtn = shadowRoot.querySelector('#dcExportBtn');
+                const clearBtn = shadowRoot.querySelector('#dcClearBtn');
+                const copyBtn = shadowRoot.querySelector('#dcCopyBtn');
+                const closeBtn = shadowRoot.querySelector('#dcClose');
+                const minimizeBtn = shadowRoot.querySelector('#dcMinimize');
+                
+                if ((startBtn && (target === startBtn || startBtn.contains(target))) || target.id === 'dcStartBtn') {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    console.log('Start button clicked');
+                    startCollecting();
+                    return;
+                }
+                if ((stopBtn && (target === stopBtn || stopBtn.contains(target))) || target.id === 'dcStopBtn') {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    console.log('Stop button clicked');
+                    stopCollecting();
+                    return;
+                }
+                if ((exportBtn && (target === exportBtn || exportBtn.contains(target))) || target.id === 'dcExportBtn') {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    console.log('Export button clicked');
+                    exportData();
+                    return;
+                }
+                if ((clearBtn && (target === clearBtn || clearBtn.contains(target))) || target.id === 'dcClearBtn') {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    console.log('Clear button clicked');
+                    clearData();
+                    return;
+                }
+                if ((copyBtn && (target === copyBtn || copyBtn.contains(target))) || target.id === 'dcCopyBtn') {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    console.log('Copy button clicked');
+                    copyToClipboard();
+                    return;
+                }
+                if ((closeBtn && (target === closeBtn || closeBtn.contains(target))) || target.id === 'dcClose') {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    console.log('Close button clicked');
+                    closeCollector();
+                    return;
+                }
+                if ((minimizeBtn && (target === minimizeBtn || minimizeBtn.contains(target))) || target.id === 'dcMinimize') {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    const content = shadowRoot.querySelector('#dataCollectorUI');
+                    if (content) {
+                        content.classList.toggle('dc-minimized');
+                        isUIMinimized = !isUIMinimized;
+                    }
+                    return;
+                }
+                
+                // Handle tabs
+                if (matchesSelector(target, '.dc-tab')) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    const tabs = shadowRoot.querySelectorAll('.dc-tab');
+                    tabs.forEach(t => {
+                        if (t) t.classList.remove('active');
+                    });
+                    target.classList.add('active');
+                    currentTab = target.dataset.tab || 'phones';
+                    updateUI();
+                    return;
+                }
+            }, true);
+        }
+        
+        // Helper function to safely attach event listeners
+        function safeAttachEvent(elementId, eventType, handler) {
+            try {
+                // Query within shadow root
+                const element = shadowRoot.querySelector('#' + elementId);
+                if (element && typeof handler === 'function') {
+                    element.addEventListener(eventType, handler);
+                    return true;
+                } else {
+                    console.warn('Element not found or handler invalid:', elementId);
+                    return false;
+                }
+            } catch (e) {
+                console.warn('Error attaching event to', elementId, ':', e);
+                return false;
+            }
+        }
+        
+        // Use requestAnimationFrame to ensure DOM is ready
+        requestAnimationFrame(() => {
+            // Attach direct event listeners as backup (event delegation is primary)
+            const attachDirectListeners = () => {
+                const startBtn = shadowRoot.querySelector('#dcStartBtn');
+                const stopBtn = shadowRoot.querySelector('#dcStopBtn');
+                const exportBtn = shadowRoot.querySelector('#dcExportBtn');
+                const clearBtn = shadowRoot.querySelector('#dcClearBtn');
+                const copyBtn = shadowRoot.querySelector('#dcCopyBtn');
+                const closeBtn = shadowRoot.querySelector('#dcClose');
+                const minimizeBtn = shadowRoot.querySelector('#dcMinimize');
+                
+                if (startBtn) {
+                    startBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        startCollecting();
+                    });
+                }
+                if (stopBtn) {
+                    stopBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        stopCollecting();
+                    });
+                }
+                if (exportBtn) {
+                    exportBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        exportData();
+                    });
+                }
+                if (clearBtn) {
+                    clearBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        clearData();
+                    });
+                }
+                if (copyBtn) {
+                    copyBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        copyToClipboard();
+                    });
+                }
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        closeCollector();
+                    });
+                }
+                if (minimizeBtn) {
+                    minimizeBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const content = shadowRoot.querySelector('#dataCollectorUI');
+                        if (content) {
+                            content.classList.toggle('dc-minimized');
+                            isUIMinimized = !isUIMinimized;
+                        }
+                    });
+                }
 
-        document.querySelectorAll('.dc-tab').forEach(tab => {
-            tab.onclick = () => {
-                document.querySelectorAll('.dc-tab').forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-                currentTab = tab.dataset.tab;
-                updateUI();
+                const tabs = shadowRoot.querySelectorAll('.dc-tab');
+                if (tabs && tabs.length > 0) {
+                    tabs.forEach(tab => {
+                        if (tab) {
+                            tab.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                tabs.forEach(t => {
+                                    if (t) t.classList.remove('active');
+                                });
+                                tab.classList.add('active');
+                                currentTab = tab.dataset.tab || 'phones';
+                                updateUI();
+                            });
+                        }
+                    });
+                }
             };
+            
+            // Try attaching immediately
+            attachDirectListeners();
+            
+            // Also try after a short delay to ensure DOM is fully ready
+            setTimeout(attachDirectListeners, 100);
         });
 
         window.dcGetCurrentTab = () => currentTab;
     }
 
     function updateUI() {
+        if (!shadowRoot) return;
+        
         const phoneCount = collectedData.phones.size;
         const emailCount = collectedData.emails.size;
         
-        document.getElementById('dcPhoneCount').textContent = phoneCount;
-        document.getElementById('dcEmailCount').textContent = emailCount;
+        const phoneCountEl = shadowRoot.querySelector('#dcPhoneCount');
+        const emailCountEl = shadowRoot.querySelector('#dcEmailCount');
+        if (phoneCountEl) phoneCountEl.textContent = phoneCount;
+        if (emailCountEl) emailCountEl.textContent = emailCount;
         
-        const currentTab = window.dcGetCurrentTab();
-        const dataList = document.getElementById('dcDataList');
-        const dataCount = document.getElementById('dcDataCount');
+        const currentTab = window.dcGetCurrentTab ? window.dcGetCurrentTab() : 'phones';
+        const dataList = shadowRoot.querySelector('#dcDataList');
+        const dataCount = shadowRoot.querySelector('#dcDataCount');
+        
+        if (!dataList || !dataCount) return;
         
         const items = currentTab === 'phones' 
             ? Array.from(collectedData.phones) 
@@ -689,11 +1088,17 @@ const collectorScript = `
 
     function startCollecting() {
         if (isRunning) return;
+        if (!shadowRoot) return;
+        
         isRunning = true;
         
-        document.getElementById('dcStatus').classList.add('running');
-        document.getElementById('dcStartBtn').style.display = 'none';
-        document.getElementById('dcStopBtn').style.display = 'flex';
+        const statusEl = shadowRoot.querySelector('#dcStatus');
+        const startBtn = shadowRoot.querySelector('#dcStartBtn');
+        const stopBtn = shadowRoot.querySelector('#dcStopBtn');
+        
+        if (statusEl) statusEl.classList.add('running');
+        if (startBtn) startBtn.style.display = 'none';
+        if (stopBtn) stopBtn.style.display = 'flex';
         
         extractData(); // Initial extraction
         intervalId = setInterval(extractData, 2000);
@@ -703,11 +1108,17 @@ const collectorScript = `
 
     function stopCollecting() {
         if (!isRunning) return;
+        if (!shadowRoot) return;
+        
         isRunning = false;
         
-        document.getElementById('dcStatus').classList.remove('running');
-        document.getElementById('dcStartBtn').style.display = 'flex';
-        document.getElementById('dcStopBtn').style.display = 'none';
+        const statusEl = shadowRoot.querySelector('#dcStatus');
+        const startBtn = shadowRoot.querySelector('#dcStartBtn');
+        const stopBtn = shadowRoot.querySelector('#dcStopBtn');
+        
+        if (statusEl) statusEl.classList.remove('running');
+        if (startBtn) startBtn.style.display = 'flex';
+        if (stopBtn) stopBtn.style.display = 'none';
         
         if (intervalId) {
             clearInterval(intervalId);
@@ -758,7 +1169,19 @@ const collectorScript = `
 
     function closeCollector() {
         stopCollecting();
-        document.getElementById('dataCollectorUI').remove();
+        if (uiContainer && uiContainer.parentNode) {
+            uiContainer.remove();
+        }
+        if (uiObserver) {
+            uiObserver.disconnect();
+            uiObserver = null;
+        }
+        if (window.__dcCheckInterval) {
+            clearInterval(window.__dcCheckInterval);
+            window.__dcCheckInterval = null;
+        }
+        uiContainer = null;
+        shadowRoot = null;
         window.__dataCollectorRunning = false;
         console.log('👋 Data Collector closed!');
     }
