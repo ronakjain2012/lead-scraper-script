@@ -6,7 +6,7 @@ A powerful, browser-based data extraction tool that automatically collects phone
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-yellow)
 
-<iframe src="https://player.vimeo.com/video/1154570746?badge=0&amp;autopause=0&amp;player_id=0&amp;app_id=58479" width="400" height="300" frameborder="0" allow="autoplay; fullscreen; web-share" title="How Lead Collector Work"></iframe>
+[![How Lead Collector Work](https://vumbnail.com/1154570746.jpg)](https://player.vimeo.com/video/1154570746)
 
 ## ✨ Features
 
